@@ -1,0 +1,28 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: bgJobs
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: bgJobs-consumer-group
+    topics:
+      bg_Jobs: jfc_bgJobs
+  datasource:
+    url: jdbc:mysql://localhost:3306/capstone_db
+    username: capstone
+    password: capstone
+  jpa:
+    hibernate:
+      ddl-auto: update
+
+logging:
+  level:
+    org:
+      apache:
+        kafka: ERROR
+      springframework:
+        kafka: ERROR
+    kafka: ERROR
