@@ -2,12 +2,14 @@ package com.capstone.bgJobs.service;
 
 import com.capstone.bgJobs.dto.event.payload.StateUpdateJobEventPayload;
 import com.capstone.bgJobs.enums.ToolTypes;
+import com.capstone.bgJobs.model.Finding;
 import com.capstone.bgJobs.model.Tenant;
 import com.capstone.bgJobs.repository.TenantRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -15,13 +17,19 @@ public class AlertUpdateService {
 
     private final TenantRepository tenantRepository;
     private final WebClient.Builder webClientBuilder;
+    private final ElasticSearchService elasticSearchService;
+    private final JiraTicketService jiraTicketService;
 
     public AlertUpdateService(
             TenantRepository tenantRepository,
-            WebClient.Builder webClientBuilder
+            WebClient.Builder webClientBuilder,
+            ElasticSearchService elasticSearchService,
+            JiraTicketService jiraTicketService
     ) {
         this.tenantRepository = tenantRepository;
         this.webClientBuilder = webClientBuilder;
+        this.elasticSearchService = elasticSearchService;
+        this.jiraTicketService = jiraTicketService;
     }
 
     public void updateAlertState(StateUpdateJobEventPayload payload) throws Exception {
@@ -58,6 +66,7 @@ public class AlertUpdateService {
         String ghReason = mapReason(toolTypeEnum, payload.getReason());
 
         String newState = payload.getUpdatedState().toLowerCase();
+
         if (toolTypeEnum == ToolTypes.SECRET_SCAN) {
             if ("resolved".equalsIgnoreCase(newState)) {
                 patchRequest.put("state", "resolved");
@@ -78,10 +87,18 @@ public class AlertUpdateService {
                 patchRequest.put("state", "open");
             }
         }
+        
+        List<Finding> results = elasticSearchService.searchFindingsById(payload.getTenantId(), payload.getEsFindingId());
+        if (results.isEmpty()) {
+            throw new RuntimeException("Finding not found in ES. ID=" + payload.getEsFindingId());
+        }
+        Finding f = results.get(0);
+
+        if(("resolved".equals(newState) || "dismissed".equals(newState)) && f.getTicketId() != null){
+            jiraTicketService.updateTicketStatusToDone(payload.getTenantId(), f.getTicketId());
+        }
 
         WebClient webClient = webClientBuilder.build();
-        System.out.println("PATCH URL: " + patchUrl);
-        System.out.println("PATCH BODY: " + patchRequest);
 
         // 4) Perform the PATCH request
         webClient.patch()
