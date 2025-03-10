@@ -8,6 +8,7 @@ import com.capstone.bgJobs.repository.TenantRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -112,6 +113,10 @@ public class AlertUpdateService {
 
         System.out.println("[AlertUpdateService] GH alert updated => " + patchUrl);
         // Optionally re-trigger scanning or do anything else
+        System.out.println(StateSeverityMapper.mapGitHubState(newState, ghReason));
+        f.setState(StateSeverityMapper.mapGitHubState(newState, ghReason));
+        f.setUpdatedAt(Instant.now().toString());
+        elasticSearchService.saveFinding(payload.getTenantId(), f);
     }
 
     /**

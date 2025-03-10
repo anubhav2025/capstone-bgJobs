@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.*;
 
 @Service
@@ -39,6 +40,7 @@ public class JiraTicketService {
      */
     public String createTicket(String tenantId, String findingId, String summary, String description) {
         Tenant tenant = getTenantOrThrow(tenantId);
+        System.out.println("hello1");
 
         // 1) Build request body for JIRA
         Map<String, Object> fieldsMap = new HashMap<>();
@@ -82,6 +84,7 @@ public class JiraTicketService {
         System.out.println("hello");
         System.out.println(finding.getId());
         finding.setTicketId(ticketKey);
+        finding.setUpdatedAt(Instant.now().toString());
         elasticSearchService.saveFinding(tenantId, finding);
 
         // 4) Create TenantTicket mapping in DB

@@ -4,15 +4,17 @@ import com.capstone.bgJobs.dto.ack.AcknowledgementStatus;
 import com.capstone.bgJobs.dto.ack.StateUpdateAcknowledgement;
 import com.capstone.bgJobs.dto.ack.payload.AcknowledgementEventPayload;
 import com.capstone.bgJobs.dto.event.CreateTicketEvent;
+import com.capstone.bgJobs.dto.event.RunbookJobEvent;
 import com.capstone.bgJobs.dto.event.StateUpdateJobEvent;
 import com.capstone.bgJobs.dto.event.UpdateTicketEvent;
 import com.capstone.bgJobs.dto.event.payload.CreateTicketEventPayload;
+import com.capstone.bgJobs.dto.event.payload.RunbookJobEventPayload;
 import com.capstone.bgJobs.dto.event.payload.StateUpdateJobEventPayload;
 import com.capstone.bgJobs.dto.event.payload.UpdateTicketEventPayload;
-import com.capstone.bgJobs.enums.EventTypes;
 import com.capstone.bgJobs.kafka.producer.StateUpdateAckProducerService;
 import com.capstone.bgJobs.service.AlertUpdateService;
 import com.capstone.bgJobs.service.JiraTicketService;
+import com.capstone.bgJobs.service.RunbookExecutionService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -26,12 +28,14 @@ public class StateUpdateConsumer {
     private final ObjectMapper objectMapper;
     private final StateUpdateAckProducerService ackProducer;
     private final JiraTicketService jiraTicketService;
+    private final RunbookExecutionService runbookExecutionService;
 
-    public StateUpdateConsumer(AlertUpdateService alertUpdateService, StateUpdateAckProducerService ackProducer, JiraTicketService jiraTicketService) {
+    public StateUpdateConsumer(AlertUpdateService alertUpdateService, StateUpdateAckProducerService ackProducer, JiraTicketService jiraTicketService, RunbookExecutionService runbookExecutionService) {
         this.alertUpdateService = alertUpdateService;
         this.objectMapper = new ObjectMapper();
         this.ackProducer = ackProducer;
         this.jiraTicketService = jiraTicketService;
+        this.runbookExecutionService = runbookExecutionService;
     }
 
     @KafkaListener(
@@ -69,6 +73,9 @@ public class StateUpdateConsumer {
                 case "UPDATE_TICKET":
                     handleUpdateTicket(realRoot);
                     break;
+                case "RUNBOOK_JOB":
+                    handleRunbookJob(realRoot);
+                    break;
                 default:
                     System.out.println("[BackGroundJobConsumer] Received type=" + typeStr 
                         + ", ignoring (not recognized).");
@@ -79,6 +86,19 @@ public class StateUpdateConsumer {
             System.err.println("[StateUpdateConsumer] Error handling message: " + e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    private void handleRunbookJob(JsonNode root) throws Exception {
+        RunbookJobEvent event = objectMapper.treeToValue(root, RunbookJobEvent.class);
+        RunbookJobEventPayload payload = event.getPayload();
+        System.out.println("[StateUpdateConsumer] RUNBOOK_JOB => tenant=" + payload.getTenantId()
+            + ", #findings=" + payload.getFindingIds().size());
+
+        runbookExecutionService.executeRunbookJob(payload.getTenantId(), payload.getFindingIds());
+
+        publishAck(event.getEventId(), true);
+        // System.out.println("hello");
+        // System.out.println(event.getEventId());
     }
 
     public void handleUpdateFinding(JsonNode root) throws Exception {
